@@ -38,4 +38,16 @@ app.get("/calendar/events", async (req, res) => {
     if (event) {
       res.json({
         summary: event.summary,
-        start:
+        start: event.start.dateTime || event.start.date,
+        end: event.end.dateTime || event.end.date,
+      });
+    } else {
+      res.json({ message: "No upcoming events found." });
+    }
+  } catch (error) {
+    console.error("Error fetching events:", error);
+    res.status(500).send("Error fetching events");
+  }
+});
+
+// ==
