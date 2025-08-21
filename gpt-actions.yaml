@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Tina GPT Google Proxy
-  version: 1.0.0
+  version: 1.1.0
 servers:
   - url: https://tina-gpt-proxy.onrender.com
 paths:
@@ -25,10 +25,14 @@ paths:
                       type: string
                     end:
                       type: string
+
   /gmail/send:
     post:
       operationId: sendEmail
       summary: Send an email using Gmail
+      description: |
+        Sends a **real email** through Gmail on behalf of the connected account.
+        Requires `to`, `subject`, and `message`.
       requestBody:
         required: true
         content:
@@ -42,10 +46,17 @@ paths:
               properties:
                 to:
                   type: string
+                  description: Recipient email address
                 subject:
                   type: string
+                  description: Subject line of the email
                 message:
                   type: string
+                  description: Email body text
       responses:
         '200':
-          description: Email sent
+          description: Email sent successfully
+        '400':
+          description: Missing required fields
+        '500':
+          description: Failed to send email
