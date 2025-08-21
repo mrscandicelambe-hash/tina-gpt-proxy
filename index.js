@@ -1,25 +1,33 @@
-import express from "express";
-import { google } from "googleapis";
+// --- Calendar events endpoint (real events) ---
+app.get("/calendar/events", async (req, res) => {
+  try {
+    const calendar = google.calendar({ version: "v3", auth: authClient });
 
-const app = express();
-const port = process.env.PORT || 3000;
+    const response = await calendar.events.list({
+      calendarId: "primary",        // primary calendar
+      timeMin: new Date().toISOString(),  // only future events
+      maxResults: 5,                // adjust if you want more
+      singleEvents: true,
+      orderBy: "startTime",
+    });
 
-app.use(express.json());
+    const events = response.data.items || [];
 
-// --- Google OAuth client setup ---
-const authClient = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  "https://developers.google.com/oauthplayground"
-);
+    if (events.length === 0) {
+      return res.json({ message: "No upcoming events found." });
+    }
 
-authClient.setCredentials({
-  refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+    // Clean response (only key info)
+    const formatted = events.map(event => ({
+      id: event.id,
+      summary: event.summary,
+      start: event.start.dateTime || event.start.date,
+      end: event.end.dateTime || event.end.date,
+    }));
+
+    res.json(formatted);
+  } catch (err) {
+    console.error("Error fetching calendar events:", err);
+    res.status(500).json({ error: "Failed to fetch calendar events" });
+  }
 });
-
-// --- Health check route ---
-app.get("/", (req, res) => {
-  res.send("🚀 Tina GPT Proxy is running!");
-});
-
-// --- Example
