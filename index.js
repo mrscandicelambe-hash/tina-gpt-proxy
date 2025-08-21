@@ -79,3 +79,5 @@ app.post("/gmail/send", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Tina GPT Proxy running on port ${PORT}`);
 });
+Enable real Gmail sending
+
