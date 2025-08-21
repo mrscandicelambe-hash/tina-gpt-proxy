@@ -1,41 +1,40 @@
 import express from "express";
 import bodyParser from "body-parser";
-import cors from "cors";
 import { google } from "googleapis";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const port = process.env.PORT || 3000;
 
-app.use(cors());
 app.use(bodyParser.json());
 
-// Gmail OAuth2 setup
+// OAuth2 client setup
 const oAuth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
   "https://developers.google.com/oauthplayground"
 );
+
 oAuth2Client.setCredentials({
   refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
 });
 
-// Test endpoint
+// Root endpoint
 app.get("/", (req, res) => {
-  res.send("Tina GPT Proxy is running ✅");
+  res.send("🚀 Tina GPT Proxy is running!");
 });
 
-// GET /calendar/events
+// Example Calendar events endpoint
 app.get("/calendar/events", (req, res) => {
   res.json([
     {
-      summary: "Coaching with Lilli",
-      start: "2025-09-02T16:30:00Z",
-      end: "2025-09-02T17:30:00Z"
-    }
+      summary: "Coaching with Lillit",
+      start: "2025-08-22T10:00:00Z",
+      end: "2025-08-22T11:00:00Z",
+    },
   ]);
 });
 
-// POST /gmail/send
+// Gmail send endpoint
 app.post("/gmail/send", async (req, res) => {
   const { to, subject, message } = req.body;
 
@@ -68,14 +67,7 @@ app.post("/gmail/send", async (req, res) => {
       },
     });
 
-    res.json({ status: "✅ Email sent successfully via Gmail" });
+    res.json({ status: "✅ Email sent successfully via Gmail!" });
   } catch (error) {
     console.error("Error sending email:", error);
-    res.status(500).json({ error: "Failed to send email" });
-  }
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`✅ Tina GPT Proxy running on port ${PORT}`);
-});
+    res.status
