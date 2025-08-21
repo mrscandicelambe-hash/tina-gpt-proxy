@@ -1,76 +1,58 @@
-import express from "express";
-import bodyParser from "body-parser";
-import cors from "cors";
-import { google } from "googleapis";
+cat > index.js << 'EOF'
+import express from 'express';
+import dotenv from 'dotenv';
+import open from 'open';
+import {
+  getAuthUrl,
+  handleAuthCode,
+  listUpcomingEvents,
+  sendEmail
+} from './google.js';
+
+dotenv.config();
 
 const app = express();
-app.use(cors());
-app.use(bodyParser.json());
+const PORT = process.env.PORT || 3000;
 
-// Google OAuth2 setup
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET
-);
-oauth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+app.use(express.json());
 
-const calendar = google.calendar({ version: "v3", auth: oauth2Client });
-const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-
-// Health check
-app.get("/", (req, res) => {
-  res.send("🚀 Tina GPT Proxy is running!");
+app.get('/auth/init', (req, res) => {
+  const url = getAuthUrl();
+  res.redirect(url);
 });
 
-// Calendar events
-app.get("/calendar/events", async (req, res) => {
+app.get('/oauth2callback', async (req, res) => {
   try {
-    const response = await calendar.events.list({
-      calendarId: "primary",
-      timeMin: new Date().toISOString(),
-      maxResults: 1,
-      singleEvents: true,
-      orderBy: "startTime",
-    });
+    const code = req.query.code;
+    await handleAuthCode(code);
+    res.send('✅ Google authorization successful!');
+  } catch (error) {
+    res.status(500).send('OAuth error: ' + error.message);
+  }
+});
 
-    const event = response.data.items?.[0];
-    if (!event) {
-      return res.json({ message: "📭 No upcoming events" });
-    }
-
-    res.json({
-      summary: event.summary,
-      start: event.start.dateTime || event.start.date,
-      end: event.end.dateTime || event.end.date,
-    });
+app.get('/calendar/events', async (req, res) => {
+  try {
+    const events = await listUpcomingEvents();
+    res.json(events);
   } catch (err) {
-    console.error("❌ Calendar error:", err);
-    res.status(500).json({ error: "Failed to fetch calendar events" });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// Gmail send
-app.post("/gmail/send", async (req, res) => {
-  const { to, subject, message } = req.body;
-
-  if (!to || !subject || !message) {
-    return res.status(400).json({ error: "Missing to, subject, or message" });
-  }
-
+app.post('/gmail/send', async (req, res) => {
   try {
-    const encodedMessage = Buffer.from(
-      `To: ${to}\r\nSubject: ${subject}\r\n\r\n${message}`
-    )
-      .toString("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
+    const { to, subject, message } = req.body;
+    const result = await sendEmail({ to, subject, message });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    await gmail.users.messages.send({
-      userId: "me",
-      requestBody: {
-        raw: encodedMessage,
-      },
-    });
+app.listen(PORT, () => {
+  console.log(`✅ Server running at http://localhost:${PORT}`);
+  console.log(`🌐 Visit http://localhost:${PORT}/auth/init to authorize your Google account`);
+});
+EOF
 
-    res.json({ status: "✅ Email sent successfully via Gmail
