@@ -70,4 +70,14 @@ app.post("/gmail/send", async (req, res) => {
     res.json({ status: "✅ Email sent successfully via Gmail!" });
   } catch (error) {
     console.error("Error sending email:", error);
-    res.status
+    } catch (err) {
+    console.error("Error sending email:", err);
+    res.status(500).json({ error: "Failed to send email" });
+  }
+});  // <-- closes app.post
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Tina GPT Proxy running on port ${PORT}`);
+});
+
