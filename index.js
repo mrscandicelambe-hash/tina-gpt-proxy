@@ -3,33 +3,30 @@ import fetch from "node-fetch";
 
 const app = express();
 
-// Accept both URL-encoded (OAuth token form) and JSON
+// Middleware: parse bodies + log every request
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ limit: "1mb" }));
+app.use((req, _res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 // Health check
 app.get("/", (_req, res) => res.status(200).json({ ok: true, service: "tina-gpt-proxy" }));
 
-// ---------- OAuth passthrough (Option A) ----------
+// ---------- OAuth passthrough ----------
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
-/**
- * ChatGPT opens this URL for user consent. We immediately redirect to Google
- * with the exact same querystring ChatGPT provided (client_id, redirect_uri, scope, state, etc).
- */
+// Redirect to Google with all query params from ChatGPT
 app.get("/oauth/authorize", (req, res) => {
   const params = new URLSearchParams(req.query || {}).toString();
   return res.redirect(`${GOOGLE_AUTH_URL}?${params}`);
 });
 
-/**
- * ChatGPT posts here to exchange code->tokens (and later refresh tokens).
- * We forward the form body to Google's token endpoint and return Google's JSON.
- */
+// Forward token exchange to Google
 app.post("/oauth/token", async (req, res) => {
   try {
-    // Build x-www-form-urlencoded body from whatever we got
     const bodyParams = new URLSearchParams();
     const src = req.body || {};
     for (const [k, v] of Object.entries(src)) {
@@ -40,8 +37,6 @@ app.post("/oauth/token", async (req, res) => {
       "Content-Type": "application/x-www-form-urlencoded",
       "Accept": "application/json"
     };
-
-    // If ChatGPT sends Basic auth (client_id/secret), pass it through
     if (req.headers.authorization) headers["Authorization"] = req.headers.authorization;
 
     const resp = await fetch(GOOGLE_TOKEN_URL, {
@@ -51,6 +46,7 @@ app.post("/oauth/token", async (req, res) => {
     });
 
     const data = await resp.json().catch(() => ({}));
+    console.log("OAuth token response:", data);
     return res.status(resp.status).json(data);
   } catch (err) {
     console.error("OAuth token proxy error:", err);
@@ -58,7 +54,7 @@ app.post("/oauth/token", async (req, res) => {
   }
 });
 
-// ---------- Helper to read Google bearer token on action calls ----------
+// ---------- Helper ----------
 function getGoogleToken(req) {
   const h = req.headers.authorization || "";
   const m = h.match(/^Bearer\s+(.+)$/i);
@@ -71,10 +67,13 @@ app.post("/gmail/send", async (req, res) => {
     const token = getGoogleToken(req);
     if (!token) return res.status(401).json({ error: "Missing Google OAuth token" });
 
-    const { to, cc, bcc, subject, body } = req.body || {};
+    let { to, cc, bcc, subject, body, message } = req.body || {};
+    body = body || message;
     if (!to || !subject || !body) {
       return res.status(400).json({ error: "Missing required fields: to, subject, body" });
     }
+
+    console.log("Sending Gmail with:", { to, subject, hasBody: !!body });
 
     const headersStr = [
       `To: ${to}`,
@@ -96,6 +95,8 @@ app.post("/gmail/send", async (req, res) => {
     });
 
     const data = await g.json();
+    console.log("Gmail API response:", data);
+
     if (!g.ok) return res.status(g.status).json(data);
     return res.json({ status: "ok", messageId: data.id });
   } catch (err) {
@@ -115,6 +116,8 @@ app.post("/calendar/events", async (req, res) => {
       return res.status(400).json({ error: "Missing required fields: title, start, end" });
     }
 
+    console.log("Creating Calendar event:", { title, start, end, attendeeCount: (attendees || []).length });
+
     const event = {
       summary: title,
       description,
@@ -131,6 +134,8 @@ app.post("/calendar/events", async (req, res) => {
     });
 
     const data = await g.json();
+    console.log("Calendar API response:", data);
+
     if (!g.ok) return res.status(g.status).json(data);
     return res.json({ status: "ok", eventId: data.id, htmlLink: data.htmlLink });
   } catch (err) {
